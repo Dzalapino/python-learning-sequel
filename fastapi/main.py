@@ -1,22 +1,33 @@
 from enum import Enum
 
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Path, Query
+from pydantic import BaseModel, Field
 
 # creating instance of FastAPI
-app = FastAPI()
+app = FastAPI(
+    # You can give your API a title and add additional metadata such as a description, version number, etc.
+    # The description also supports markdown formatting.
+    title="Some Cool Title",
+    description="Even cooler description for you here",
+    version="0.1.0"
+)
 
-# simple model classes
+# Docstrings of classes will be reflected in the API documentation in the 'Schemas' section
 class Category(Enum):
+    """Category of an item"""
     TOOLS = "tools"
     CONSUMABLES = "consumables"
 
+# You can add metadata to attributes using the Field class.
+# This information will also be shown in the auto-generated documentation.
 class Item(BaseModel):
-    name: str
-    price: float
-    count: int
-    id: int
-    category: Category
+    """Representation of an item in the system."""
+
+    name: str = Field(description="Name of the item.")
+    price: float = Field(description="Price of the item in Euro.")
+    count: int = Field(description="Amount of instances of this item in stock.")
+    id: int = Field(description="Unique integer that specifies this item.")
+    category: Category = Field(description="Category this item belongs to.")
 
 items = {
     0: Item(name = "harnold", price = 2.99, count = 100, id = 0, category = Category.CONSUMABLES),
@@ -71,21 +82,47 @@ def get_item_by_parameters(
 @app.post("/items")
 def add_item(item: Item) -> dict[str, Item]:
     if item.id in items:
-        HTTPException(status_code=400, detail=f"Item with {item.id=} already exists.")
+        raise HTTPException(status_code=400, detail=f"Item with {item.id=} already exists.")
     items[item.id] = item
     return {"added": item}
 
-@app.put("/items/{item_id}")
+# The 'responses' keyword allows you to specify which responses a user can expect from this endpoint.
+@app.put(
+    "/items/{item_id}",
+    responses={
+        400: {"description": "Item not found"},
+        404: {"description": "No arguments specified"}
+    }
+)
+# The Query and Path classes also allow us to add documentation to query and path parameters.
 def update_item(
-    item_id: int,
-    name: str | None = None,
-    price: float | None = None,
-    count: int | None = None
+    item_id: int = Path(
+        title="Item ID", description="Unique integer that specifies an item.", ge=0
+    ),
+    name: str | None = Query(
+        title="Name",
+        description="New name of the item.",
+        default=None,
+        min_length=1,
+        max_length=12,
+    ),
+    price: float | None = Query(
+        title="Price",
+        description="New price of the item in Euro.",
+        default=None,
+        gt=0.0
+    ),
+    count: int | None = Query(
+        title="Count",
+        description="New amount of instances of this item in stock.",
+        default=None,
+        ge=0
+    )
 ) -> dict[str, Item]:
     
     if item_id not in items:
         # Q: why here without raise and later with raise?
-        HTTPException(status_code=404, detail=f"Item with {item_id=} does not exist.")
+        raise HTTPException(status_code=404, detail=f"Item with {item_id=} does not exist.")
     if all(info is None for info in (name, price, count)):
         # Q: what raise does?
         raise HTTPException(status_code=400, detail="No parameters provided for update.")
