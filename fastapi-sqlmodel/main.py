@@ -21,18 +21,41 @@ async def get_book_by_id(book_id: int):
     result = session.exec(query).one_or_none()
     
     if result == None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Book with {book_id=} doesn't exist.")
     
     return result
 
-@app.post('/books')
-async def add_book():
-    pass
+@app.post('/books', response_model=Book, status_code=status.HTTP_201_CREATED)
+async def add_book(book: Book):
+    new_book = Book(title=book.title, description=book.description)
+    
+    session.add(new_book)
+    session.commit()
 
-@app.put('/books/{book_id}')
-async def update_book(book_id: int):
-    pass
+    return new_book
 
-@app.delete('/books/{book_id}')
+@app.put('/books/{book_id}', response_model=Book, status_code=status.HTTP_200_OK)
+async def update_book(book_id: int, book: Book):
+    query = select(Book).where(Book.id==book_id)
+    book_to_update = session.exec(query).one_or_none()
+    
+    if book_to_update == None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Book with {book_id=} doesn't exist.")
+
+    book_to_update.title = book.title
+    book_to_update.description = book.description
+    session.commit()
+
+    return book_to_update
+
+@app.delete('/books/{book_id}', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_book(book_id: int):
-    pass
+    query = select(Book).where(Book.id==book_id)
+    result = session.exec(query).one_or_none()
+
+    if result == None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Book with {book_id=} doesn't exist.")
+    
+    session.delete(result)
+    
+    return result
